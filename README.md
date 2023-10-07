@@ -34,20 +34,26 @@ To use the Banyan Terraform Import Tool, follow these steps:
 
 ```bash
 USAGE:
-python main.py --api-key <your_api_key> --resource <resource_type> --resource-type <resource_type> --console <console_type> --folder <output_folder> --separate-files <True/False>
+ python main.py --help
+Usage: main.py [OPTIONS] API_KEY
 
---api-key: Your Banyan API key.
+Arguments:
+  API_KEY  [required]
 
---resource: The type of resource you want to import (e.g., "service", "policy", "role").
-
---resource-type: The specific subtype of the resource you want to import.
-
---console: The Banyan console to connect to (e.g., "net", "release", "preview").
-
---folder: (Optional) The output folder where Terraform configuration files will be generated.
-
---separate-files: (Optional) Specify True if you want to generate separate Terraform files for each resource.
-```
+Options:
+  --resource String                 [default: service]
+  --resource-type String
+  --console String                  [default: net]
+  --folder String
+  --separate-files / --no-separate-files
+                                  [default: no-separate-files]
+  --install-completion [bash|zsh|fish|powershell|pwsh]
+                                  Install completion for the specified shell.
+  --show-completion [bash|zsh|fish|powershell|pwsh]
+                                  Show completion for the specified shell, to
+                                  copy it or customize the installation.
+  --help                          Show this message and exit.
+  ```
 The tool will initialize Terraform and generate the necessary configuration files based on the imported resources.
 You can then use Terraform to apply or manage the infrastructure as needed.
 
@@ -56,10 +62,10 @@ Here are some example commands to use the Banyan Terraform Import Tool:
 
 ```bash
 # Import services with separate configuration files
-python banyan_import_tool.py main --api-key <your_api_key> --resource service --resource-type web --console net --separate-files True
+python main.py --api-key <banyan_api_key> --resource service --resource-type web --console net --separate-files
 
 # Import policies with a single configuration file
-python banyan_import_tool.py main --api-key <your_api_key> --resource policy --resource-type infra --console release
+python main.py --api-key <banyan_api_key> --resource policy --resource-type infra --console release
 ```
 
 
