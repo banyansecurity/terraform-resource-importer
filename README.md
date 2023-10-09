@@ -7,7 +7,8 @@ The Banyan Terraform Import Tool is a command-line utility that allows you to im
 Before using this tool, make sure you have the following prerequisites installed on your system:
 
 - Python 3.x
-- Terraform (v1.2.5) - [Terraform Installation Guide](https://www.terraform.io/downloads.html)
+- Terraform (>=v1.5.x) - [Terraform Installation Guide](https://www.terraform.io/downloads.html)
+- Banyan Terraform Provider (>=v1.2.5)
 
 ## Installation
 
