@@ -45,17 +45,19 @@ def import_and_plan(api, resource, resource_type, folder_name, separate_files):
     if separate_files:
         # separate files for each resource
         for item in resources:
-            import_statement = f'import {{ \n to = banyan_{resource}_{resource_type}.{str(item.name).replace(".", "-").lower()}\n id = "{item.id}" \n}}\n'
+            resource_name = get_resource_name(item.name)
+            import_statement = f'import {{ \n to = banyan_{resource}_{resource_type}.{resource_name}\n id = "{item.id}" \n}}\n'
             create_import_file([import_statement], folder_name, "import.tf")
-            execute_terraform_plan(folder=folder_name, file_name=f"{str(item.name).replace('.', '-').lower()}.tf")
+            execute_terraform_plan(folder=folder_name, file_name=f"{resource_name}.tf")
     else:
         # single file for all resources
         # Create a list to hold import statements
         import_statements = []
 
         for item in resources:
+            resource_name = get_resource_name(item.name)
             import_statements.append(
-                f'import {{ \n to = banyan_{resource}_{resource_type}.{str(item.name).replace(".", "-").lower()}\n id = "{item.id}" \n}}\n')
+                f'import {{ \n to = banyan_{resource}_{resource_type}.{resource_name}\n id = "{item.id}" \n}}\n')
 
         # Write all import statements to a single import.tf file
         create_import_file(import_statements, folder_name, "import.tf")
@@ -64,6 +66,12 @@ def import_and_plan(api, resource, resource_type, folder_name, separate_files):
         execute_terraform_plan(folder=folder_name, file_name="generated.tf")
 
     print("Done")
+
+
+def get_resource_name(name):
+    resource_name = (str(name).replace(".", "-").replace(" ", "-").
+                     replace( "/", "-").replace(":","-").lower())
+    return resource_name
 
 
 # def get_filtered_infra_services(resources, resource_type):
