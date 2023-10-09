@@ -37,10 +37,10 @@ def initialize_api(api_key, api_url):
 def import_and_plan(api, resource, resource_type, folder_name, separate_files):
     resources = get_resources(api, resource, resource_type)
     if len(resources) <= 0:
-        print(f"No {resource.capitalize()} found.")
+        print(f"No {resource.capitalize()} of type {resource_type.capitalize()} found.")
         return
 
-    print(f"Importing {resource.capitalize()}....")
+    print(f"Importing {resource.capitalize()} of type {resource_type.capitalize()}....")
 
     if separate_files:
         # separate files for each resource
@@ -54,7 +54,8 @@ def import_and_plan(api, resource, resource_type, folder_name, separate_files):
         import_statements = []
 
         for item in resources:
-            import_statements.append(f'import {{ \n to = banyan_{resource}_{resource_type}.{str(item.name).replace(".", "-").lower()}\n id = "{item.id}" \n}}\n')
+            import_statements.append(
+                f'import {{ \n to = banyan_{resource}_{resource_type}.{str(item.name).replace(".", "-").lower()}\n id = "{item.id}" \n}}\n')
 
         # Write all import statements to a single import.tf file
         create_import_file(import_statements, folder_name, "import.tf")
@@ -63,6 +64,61 @@ def import_and_plan(api, resource, resource_type, folder_name, separate_files):
         execute_terraform_plan(folder=folder_name, file_name="generated.tf")
 
     print("Done")
+
+
+# def get_filtered_infra_services(resources, resource_type):
+#     filtered_resources = []
+#     for service in resources:
+#         if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower():
+#             filtered_resources.append(service)
+#     return filtered_resources
+
+def get_filtered_infra_services(resources, resource_type):
+    return [service for service in resources if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
+
+
+# def get_filtered_policies(resources, resource_type):
+#     filtered_resources = []
+#     for policy in resources:
+#         if resource_type.lower() == "web":
+#             if bool(policy.policy_spec.options.disable_tls_client_authentication) and str(
+#                     policy.policy_spec.options.l7_protocol).lower() == "http":
+#                 filtered_resources.append(policy)
+#         else:
+#             for access in policy.policy_spec.access:
+#                 if resource_type.lower() == "infra":
+#                     if bool(policy.policy_spec.options.disable_tls_client_authentication) is False and (access.rules.l4_access is None and access.rules.l7_access is not None):
+#                         filtered_resources.append(policy)
+#                 elif resource_type.lower() == "tunnel":
+#                     if bool(policy.policy_spec.options.disable_tls_client_authentication) is False and (access.rules.l4_access is not None and access.rules.l7_access is None):
+#                         filtered_resources.append(policy)
+#     return filtered_resources
+
+def get_filtered_policies(resources, resource_type):
+    filtered_resources = []
+
+    for policy in resources:
+        options = policy.policy_spec.options
+        access = policy.policy_spec.access
+        l7_protocol = str(options.l7_protocol).lower()
+        disable_tls_client_authentication = bool(options.disable_tls_client_authentication)
+
+        if resource_type.lower() == "web" and disable_tls_client_authentication and l7_protocol == "http":
+            filtered_resources.append(policy)
+        elif resource_type.lower() == "infra":
+            appended = False
+            for access_item in access:
+                if not disable_tls_client_authentication and access_item.rules.l4_access is None and access_item.rules.l7_access is not None and not appended:
+                    filtered_resources.append(policy)
+                    appended = True
+        elif resource_type.lower() == "tunnel":
+            appended = False
+            for access_item in access:
+                if not disable_tls_client_authentication and access_item.rules.l4_access is not None and access_item.rules.l7_access is None and not appended:
+                    filtered_resources.append(policy)
+                    appended = True
+
+    return filtered_resources
 
 
 def get_resources(api, resource, resource_type):
@@ -74,6 +130,11 @@ def get_resources(api, resource, resource_type):
     if api_function is None:
         raise Exception(f"Invalid input resource_type for resource {resource}")
     resources = api_function()
+    if resource.lower() == "service" and resource_type.lower() != "web" and resource_type.lower() != "tunnel":
+        resources = get_filtered_infra_services(resources, resource_type)
+    elif resource.lower() == "policy":
+        resources = get_filtered_policies(resources, resource_type)
+
     return resources
 
 
@@ -117,7 +178,7 @@ terraform {{
   required_providers {{
     banyan = {{
       source = "banyansecurity/banyan"
-      version = "1.2.5"
+      version = "1.2.6"
     }}
   }}
 }}
@@ -154,7 +215,18 @@ def main(api_key: str, resource="service", resource_type="", console="net", fold
     api_url = get_api_url(console)
     api = initialize_api(api_key, api_url)
     execute_terraform_init(host=api_url, api_key=api_key, folder=folder_name)
-    import_and_plan(api, resource, resource_type, folder_name, separate_files)
+    if resource == "all":
+        for my_resource in ["service", "policy", "role"]:
+            if my_resource == "service":
+                for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp", "tunnel"]:
+                    import_and_plan(api, "service", my_resource_type, folder_name, separate_files)
+            if my_resource == "policy":
+                for my_resource_type in ["infra", "tunnel", "web"]:
+                    import_and_plan(api, "policy", my_resource_type, folder_name, separate_files)
+            if my_resource == "role":
+                import_and_plan(api, "role", "", folder_name, separate_files)
+    else:
+        import_and_plan(api, resource, resource_type, folder_name, separate_files)
 
 
 if __name__ == "__main__":
