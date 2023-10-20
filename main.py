@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import typer
@@ -34,36 +35,42 @@ def initialize_api(api_key, api_url):
 
 
 # Function to import resources and execute Terraform plan
-def import_and_plan(api, resource, resource_type, folder_name, separate_files):
+def import_and_plan(api, resource, resource_type, folder_name):
     resources = get_resources(api, resource, resource_type)
     if len(resources) <= 0:
-        print(f"No {resource.capitalize()} of type {resource_type.capitalize()} found.")
+        print(f"No {resource.upper()} of type {resource_type.upper()} found.")
         return
 
-    print(f"Importing {resource.capitalize()} of type {resource_type.capitalize()}....")
+    print(f"Importing {resource.upper()} of type {resource_type.upper()}....")
 
-    if separate_files:
-        # separate files for each resource
-        for item in resources:
-            resource_name = get_resource_name(item.name)
-            import_statement = f'import {{ \n to = banyan_{resource}_{resource_type}.{resource_name}\n id = "{item.id}" \n}}\n'
-            create_import_file([import_statement], folder_name, "import.tf")
-            execute_terraform_plan(folder=folder_name, file_name=f"{resource_name}.tf")
-    else:
-        # single file for all resources
-        # Create a list to hold import statements
-        import_statements = []
+    # collect all passed import statements into a list
+    import_statements = []
+    # separate files for each resource
+    os.makedirs(f"{folder_name}/separate_resources", exist_ok=True)
+    my_resource_import = f'{resource}_{resource_type}'
+    if resource == "role":
+        my_resource_import = "role"
 
-        for item in resources:
-            resource_name = get_resource_name(item.name)
-            import_statements.append(
-                f'import {{ \n to = banyan_{resource}_{resource_type}.{resource_name}\n id = "{item.id}" \n}}\n')
-
-        # Write all import statements to a single import.tf file
-        create_import_file(import_statements, folder_name, "import.tf")
-
-        # Call execute_terraform_plan once with fixed file name generated.tf
-        execute_terraform_plan(folder=folder_name, file_name="generated.tf")
+    for item in resources:
+        resource_name = get_resource_name(item.name)
+        import_statement = f'import {{ \n to = banyan_{my_resource_import}.{resource_name}\n id = "{item.id}" \n}}\n'
+        create_import_file([import_statement], f"{folder_name}", "import.tf")
+        try:
+            execute_terraform_plan(folder=f"{folder_name}", file_name=f"{resource_name}.tf")
+            import_statements.append(import_statement)
+            os.replace(f"{folder_name}/{resource_name}.tf", f"{folder_name}/separate_resources/{resource_name}.tf")
+        except Exception as e:
+            # write errors exports to file
+            with open(f"{folder_name}/failed_imports.txt", "a") as file:
+                content = f"Failed {resource_name} with error: {e}\n"
+                file.write(content)
+            print(f"[WARN] Error exporting resource {resource_name} error: {e}")
+    # delete import.tf file which could have last entry
+    os.remove(f"{folder_name}/import.tf")
+    # Write all import statements to a single import.tf file
+    create_import_file(import_statements, folder_name, f"import_{my_resource_import}.tf")
+    # Call execute_terraform_plan once with fixed file name generated.tf
+    execute_terraform_plan(folder=folder_name, file_name=f"generated_{my_resource_import}.tf")
 
     print("Done")
 
@@ -74,55 +81,37 @@ def get_resource_name(name):
     return resource_name
 
 
-# def get_filtered_infra_services(resources, resource_type):
-#     filtered_resources = []
-#     for service in resources:
-#         if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower():
-#             filtered_resources.append(service)
-#     return filtered_resources
-
 def get_filtered_infra_services(resources, resource_type):
     return [service for service in resources if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
-
-
-# def get_filtered_policies(resources, resource_type):
-#     filtered_resources = []
-#     for policy in resources:
-#         if resource_type.lower() == "web":
-#             if bool(policy.policy_spec.options.disable_tls_client_authentication) and str(
-#                     policy.policy_spec.options.l7_protocol).lower() == "http":
-#                 filtered_resources.append(policy)
-#         else:
-#             for access in policy.policy_spec.access:
-#                 if resource_type.lower() == "infra":
-#                     if bool(policy.policy_spec.options.disable_tls_client_authentication) is False and (access.rules.l4_access is None and access.rules.l7_access is not None):
-#                         filtered_resources.append(policy)
-#                 elif resource_type.lower() == "tunnel":
-#                     if bool(policy.policy_spec.options.disable_tls_client_authentication) is False and (access.rules.l4_access is not None and access.rules.l7_access is None):
-#                         filtered_resources.append(policy)
-#     return filtered_resources
 
 def get_filtered_policies(resources, resource_type):
     filtered_resources = []
 
     for policy in resources:
-        options = policy.policy_spec.options
-        access = policy.policy_spec.access
-        l7_protocol = str(options.l7_protocol).lower()
-        disable_tls_client_authentication = bool(options.disable_tls_client_authentication)
+        my_policy_spec = json.loads(policy.spec)
+        access = (my_policy_spec["spec"])["access"]
+        options = {}
+        l7_protocol = ""
+        disable_tls_client_authentication = False
+
+        if "options" in dict(my_policy_spec["spec"]).keys():
+            options = (my_policy_spec["spec"])["options"]
+            l7_protocol = str(options["l7_protocol"]).lower()
+            disable_tls_client_authentication = bool(options["disable_tls_client_authentication"])
 
         if resource_type.lower() == "web" and disable_tls_client_authentication and l7_protocol == "http":
             filtered_resources.append(policy)
-        elif resource_type.lower() == "infra":
+        elif resource_type.lower() == "infra" and len(options) > 1 and not disable_tls_client_authentication and l7_protocol == "":
             appended = False
             for access_item in access:
-                if not disable_tls_client_authentication and access_item.rules.l4_access is None and access_item.rules.l7_access is not None and not appended:
+                if ("l4_access" not in dict(access_item["rules"]).keys()
+                        and "l7_access" in dict(access_item["rules"]).keys() and not appended):
                     filtered_resources.append(policy)
                     appended = True
-        elif resource_type.lower() == "tunnel":
+        elif resource_type.lower() == "tunnel" and len(options) == 0:
             appended = False
             for access_item in access:
-                if not disable_tls_client_authentication and access_item.rules.l4_access is not None and access_item.rules.l7_access is None and not appended:
+                if "options" not in dict(my_policy_spec["spec"]).keys() and "l4_access" in dict(access_item["rules"]) and "l7_access" not in dict(access_item["rules"]).keys() and not appended:
                     filtered_resources.append(policy)
                     appended = True
 
@@ -218,7 +207,7 @@ def create_import_file(import_statements, folder, file_name):
 
 
 @app.command()
-def main(api_key: str, resource="service", resource_type="", console="net", folder="", separate_files: bool = False):
+def main(api_key: str, resource="service", resource_type="", console="net", folder=""):
     folder_name = get_folder_name(folder)
     api_url = get_api_url(console)
     api = initialize_api(api_key, api_url)
@@ -227,14 +216,22 @@ def main(api_key: str, resource="service", resource_type="", console="net", fold
         for my_resource in ["service", "policy", "role"]:
             if my_resource == "service":
                 for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp", "tunnel"]:
-                    import_and_plan(api, "service", my_resource_type, folder_name, separate_files)
+                    import_and_plan(api, "service", my_resource_type, folder_name)
             if my_resource == "policy":
                 for my_resource_type in ["infra", "tunnel", "web"]:
-                    import_and_plan(api, "policy", my_resource_type, folder_name, separate_files)
+                    import_and_plan(api, "policy", my_resource_type, folder_name)
             if my_resource == "role":
-                import_and_plan(api, "role", "", folder_name, separate_files)
+                import_and_plan(api, "role", "", folder_name)
+    elif resource == "service" and resource_type == "all":
+        for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp", "tunnel"]:
+            import_and_plan(api, "service", my_resource_type, folder_name)
+    elif resource == "policy" and resource_type == "all":
+        for my_resource_type in ["infra", "tunnel", "web"]:
+            import_and_plan(api, "policy", my_resource_type, folder_name)
+    elif resource == "role" and resource_type == "":
+        import_and_plan(api, "role", "", folder_name)
     else:
-        import_and_plan(api, resource, resource_type, folder_name, separate_files)
+       import_and_plan(api, resource, resource_type, folder_name)
 
 
 if __name__ == "__main__":
