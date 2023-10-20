@@ -3,6 +3,7 @@ import os
 import time
 import typer
 import subprocess
+import glob
 from banyan.api import BanyanApiClient
 
 app = typer.Typer()
@@ -15,6 +16,10 @@ API_URLS = {
 }
 
 
+def get_log_file(folder_prefix):
+    return f"{folder_prefix}/terraform_command.logs"
+
+
 # Function to generate a folder name or use the provided one
 def get_folder_name(folder):
     folder_name = folder
@@ -22,6 +27,16 @@ def get_folder_name(folder):
         folder_name = str(int(time.time()))
     os.makedirs("%s" % folder_name, exist_ok=True)
     return folder_name
+
+
+def concat_files(names: list, folder: str):
+    for name in names:
+        read_files = glob.glob(f"{folder}/{name}_*.tf")
+        with open(f"{folder}/{name}.tf", "wb") as outfile:
+            for f in read_files:
+                with open(f, "rb") as infile:
+                    outfile.write(infile.read())
+                os.remove(f)
 
 
 # Function to get the API URL based on the console choice
@@ -38,9 +53,9 @@ def initialize_api(api_key, api_url):
 def import_and_plan(api, resource, resource_type, folder_name):
     resources = get_resources(api, resource, resource_type)
     if len(resources) <= 0:
-        print(f"No {resource.upper()} of type {resource_type.upper()} found.")
+        print(f"No resource {resource.upper()} of type {resource_type.upper()} found.")
         return
-
+    print(f"Found {len(resources)} {resource.upper()} of type {resource_type.upper()}")
     print(f"Importing {resource.upper()} of type {resource_type.upper()}....")
 
     # collect all passed import statements into a list
@@ -64,7 +79,7 @@ def import_and_plan(api, resource, resource_type, folder_name):
             with open(f"{folder_name}/failed_imports.txt", "a") as file:
                 content = f"Failed {resource_name} with error: {e}\n"
                 file.write(content)
-            print(f"[WARN] Error exporting resource {resource_name} error: {e}")
+            print(f".....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.")
     # delete import.tf file which could have last entry
     os.remove(f"{folder_name}/import.tf")
     # Write all import statements to a single import.tf file
@@ -72,7 +87,7 @@ def import_and_plan(api, resource, resource_type, folder_name):
     # Call execute_terraform_plan once with fixed file name generated.tf
     execute_terraform_plan(folder=folder_name, file_name=f"generated_{my_resource_import}.tf")
 
-    print("Done")
+    print(f"---------------Finished importing {len(resources)} {resource.upper()} of type {resource_type.upper()}--------------------")
 
 
 def get_resource_name(name):
@@ -83,6 +98,7 @@ def get_resource_name(name):
 
 def get_filtered_infra_services(resources, resource_type):
     return [service for service in resources if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
+
 
 def get_filtered_policies(resources, resource_type):
     filtered_resources = []
@@ -144,7 +160,7 @@ def get_valid_resource_type(api):
             "rdp": api.services_infra.list,
             "ssh": api.services_infra.list,
             "tcp": api.services_infra.list,
-            "tunnel": api.service_tunnels.list,
+            #"tunnel": api.service_tunnels.list,
         },
         "policy": {
             "infra": api.policies.list,
@@ -162,10 +178,12 @@ def get_valid_resource_type(api):
 def execute_terraform_plan(folder, file_name):
     terraform_command = f"terraform -chdir={folder} plan -generate-config-out={file_name}"
     try:
-        subprocess.run(terraform_command, shell=True, check=True)
-        print("Terraform command executed successfully.")
+        with open (get_log_file(folder), 'a') as file:
+            subprocess.run(terraform_command, encoding='utf-8', stdout=file, stderr=file, shell=True, check=True)
+        if "generated_" not in file_name:
+            print(f".....Terraform command executed successfully for {str(file_name).replace('.tf', '')}.")
     except subprocess.CalledProcessError as e:
-        raise Exception(f"Error executing Terraform command: {e}")
+        raise Exception(f".....Error executing Terraform command: {e}")
 
 
 # Function to execute Terraform initialization
@@ -192,10 +210,11 @@ provider "banyan" {{
             file.write("\n")
     terraform_command = f"terraform -chdir={folder} init"
     try:
-        subprocess.run(terraform_command, shell=True, check=True)
-        print("Terraform command executed successfully.")
+        with open(get_log_file(folder), 'a') as file:
+            subprocess.run(terraform_command, encoding='utf-8', stdout=file, stderr=file, shell=True, check=True)
+        print(f"Terraform init executed successfully.")
     except subprocess.CalledProcessError as e:
-        raise Exception(f"Error executing Terraform command: {e}")
+        raise Exception(f".....Error executing Terraform command: {e}")
 
 
 # Function to create an import file
@@ -215,7 +234,7 @@ def main(api_key: str, resource="service", resource_type="", console="net", fold
     if resource == "all":
         for my_resource in ["service", "policy", "role"]:
             if my_resource == "service":
-                for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp", "tunnel"]:
+                for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp"]:
                     import_and_plan(api, "service", my_resource_type, folder_name)
             if my_resource == "policy":
                 for my_resource_type in ["infra", "tunnel", "web"]:
@@ -223,15 +242,18 @@ def main(api_key: str, resource="service", resource_type="", console="net", fold
             if my_resource == "role":
                 import_and_plan(api, "role", "", folder_name)
     elif resource == "service" and resource_type == "all":
-        for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp", "tunnel"]:
+        for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp"]:
             import_and_plan(api, "service", my_resource_type, folder_name)
     elif resource == "policy" and resource_type == "all":
         for my_resource_type in ["infra", "tunnel", "web"]:
             import_and_plan(api, "policy", my_resource_type, folder_name)
-    elif resource == "role" and resource_type == "":
+    elif resource == "role" and resource_type == "all":
         import_and_plan(api, "role", "", folder_name)
     else:
-       import_and_plan(api, resource, resource_type, folder_name)
+        import_and_plan(api, resource, resource_type, folder_name)
+
+    # combine seperated resource files into a single file
+    concat_files(["generated", "import"], folder_name)
 
 
 if __name__ == "__main__":
