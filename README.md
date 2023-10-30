@@ -1,3 +1,6 @@
+# : WARNING :
+Warning: Please contact your Banyan Customer Success representative, before running this script in your environment. The script may cause changes to your environment and we advise you to reach out to us to guide you through it. You may still decide to use it but that might change the configuration and cause unintended consequences.
+
 # Banyan Terraform Import Tool
 
 The Banyan Terraform Import Tool is a command-line utility that allows you to import resources from the Banyan API and generate Terraform configuration files for managing those resources. This tool simplifies the process of managing Banyan resources through Terraform, making it easier to automate your infrastructure setup.
