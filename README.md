@@ -61,6 +61,19 @@ Options:
 The tool will initialize Terraform and generate the necessary configuration files based on the imported resources.
 You can then use Terraform to apply or manage the infrastructure as needed.
 
+Please Note:
+Once you import your Banyan resources into Terraform, you may now use the import.tf file, in addition to the generated.tf or separated Terraform code files, in your Terraform code. 
+Please ensure your code utilizes the Banyan Terraform provider 1.2.5 or above versions.
+
+```bash
+terraform init
+
+##The command ‘terraform plan’ should display the number of resources being imported, and NOT the number of added or updated or removed.
+
+terraform plan 
+terraform apply
+```
+
 # Examples
 Here are some example commands to use the Banyan Terraform Import Tool:
 
