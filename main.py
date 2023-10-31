@@ -78,8 +78,7 @@ def import_and_plan(api, resource, resource_type, folder_name, module:bool = Fal
             with open(f"{folder_name}/failed_imports.txt", "a") as file:
                 content = f"Failed {resource_name} with error: {e}\n"
                 file.write(content)
-            print(
-                f".....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.")
+            print(f'.....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.')
     # delete import.tf file which could have last entry
     os.remove(f"{folder_name}/import.tf")
     # Write all import statements to a single import.tf file
