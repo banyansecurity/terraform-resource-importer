@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import typer
 import subprocess
 import glob
@@ -24,7 +23,7 @@ def get_log_file(folder_prefix):
 def get_folder_name(folder):
     folder_name = folder
     if not folder:
-        folder_name = str(int(time.time()))
+        folder_name = "default"
     os.makedirs("%s" % folder_name, exist_ok=True)
     return folder_name
 
@@ -50,7 +49,7 @@ def initialize_api(api_key, api_url):
 
 
 # Function to import resources and execute Terraform plan
-def import_and_plan(api, resource, resource_type, folder_name):
+def import_and_plan(api, resource, resource_type, folder_name, module:bool = False):
     resources = get_resources(api, resource, resource_type)
     if len(resources) <= 0:
         print(f"No resource {resource.upper()} of type {resource_type.upper()} found.")
@@ -79,7 +78,8 @@ def import_and_plan(api, resource, resource_type, folder_name):
             with open(f"{folder_name}/failed_imports.txt", "a") as file:
                 content = f"Failed {resource_name} with error: {e}\n"
                 file.write(content)
-            print(f".....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.")
+            print(
+                f".....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.")
     # delete import.tf file which could have last entry
     os.remove(f"{folder_name}/import.tf")
     # Write all import statements to a single import.tf file
@@ -87,17 +87,21 @@ def import_and_plan(api, resource, resource_type, folder_name):
     # Call execute_terraform_plan once with fixed file name generated.tf
     execute_terraform_plan(folder=folder_name, file_name=f"generated_{my_resource_import}.tf")
 
-    print(f"---------------Finished importing {len(resources)} {resource.upper()} of type {resource_type.upper()}--------------------")
+    create_import_file(import_statements, folder_name, f"import_{my_resource_import}.tf", module=module)
+
+    print(
+        f"---------------Finished importing {len(resources)} {resource.upper()} of type {resource_type.upper()}--------------------")
 
 
 def get_resource_name(name):
     resource_name = (str(name).replace(".", "-").replace(" ", "-").
-                     replace( "/", "-").replace(":","-").lower())
+                     replace("/", "-").replace(":", "-").lower())
     return resource_name
 
 
 def get_filtered_infra_services(resources, resource_type):
-    return [service for service in resources if str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
+    return [service for service in resources if
+            str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
 
 
 def get_filtered_policies(resources, resource_type):
@@ -117,7 +121,8 @@ def get_filtered_policies(resources, resource_type):
 
         if resource_type.lower() == "web" and disable_tls_client_authentication and l7_protocol == "http":
             filtered_resources.append(policy)
-        elif resource_type.lower() == "infra" and len(options) > 1 and not disable_tls_client_authentication and l7_protocol == "":
+        elif resource_type.lower() == "infra" and len(
+                options) > 1 and not disable_tls_client_authentication and l7_protocol == "":
             appended = False
             for access_item in access:
                 if ("l4_access" not in dict(access_item["rules"]).keys()
@@ -127,7 +132,8 @@ def get_filtered_policies(resources, resource_type):
         elif resource_type.lower() == "tunnel" and len(options) == 0:
             appended = False
             for access_item in access:
-                if "options" not in dict(my_policy_spec["spec"]).keys() and "l4_access" in dict(access_item["rules"]) and "l7_access" not in dict(access_item["rules"]).keys() and not appended:
+                if "options" not in dict(my_policy_spec["spec"]).keys() and "l4_access" in dict(
+                        access_item["rules"]) and "l7_access" not in dict(access_item["rules"]).keys() and not appended:
                     filtered_resources.append(policy)
                     appended = True
 
@@ -160,7 +166,7 @@ def get_valid_resource_type(api):
             "rdp": api.services_infra.list,
             "ssh": api.services_infra.list,
             "tcp": api.services_infra.list,
-            #"tunnel": api.service_tunnels.list,
+            # "tunnel": api.service_tunnels.list,
         },
         "policy": {
             "infra": api.policies.list,
@@ -178,7 +184,7 @@ def get_valid_resource_type(api):
 def execute_terraform_plan(folder, file_name):
     terraform_command = f"terraform -chdir={folder} plan -generate-config-out={file_name}"
     try:
-        with open (get_log_file(folder), 'a') as file:
+        with open(get_log_file(folder), 'a') as file:
             subprocess.run(terraform_command, encoding='utf-8', stdout=file, stderr=file, shell=True, check=True)
         if "generated_" not in file_name:
             print(f".....Terraform command executed successfully for {str(file_name).replace('.tf', '')}.")
@@ -210,7 +216,7 @@ provider "banyan" {{
             file.write("\n")
     terraform_command = f"terraform -chdir={folder} init"
     try:
-        with open(get_log_file(folder), 'a') as file:
+        with open(get_log_file(folder), 'w') as file:
             subprocess.run(terraform_command, encoding='utf-8', stdout=file, stderr=file, shell=True, check=True)
         print(f"Terraform init executed successfully.")
     except subprocess.CalledProcessError as e:
@@ -218,7 +224,13 @@ provider "banyan" {{
 
 
 # Function to create an import file
-def create_import_file(import_statements, folder, file_name):
+def create_import_file(import_statements: list, folder, file_name, module: bool = False):
+    if module is True:
+        new_import_statements = []
+        for each_import in import_statements:
+            each_import = each_import.replace("to = banyan_", f"to = module.{folder}.banyan_")
+            new_import_statements.append(each_import)
+        import_statements = new_import_statements
     content_template = '\n'.join(import_statements)
     with open(f"{folder}/{file_name}", "w") as file:
         file.write(content_template)
@@ -226,7 +238,7 @@ def create_import_file(import_statements, folder, file_name):
 
 
 @app.command()
-def main(api_key: str, resource="service", resource_type="", console="net", folder=""):
+def main(api_key: str, resource="service", resource_type="", console="net", folder="", module: bool = False):
     folder_name = get_folder_name(folder)
     api_url = get_api_url(console)
     api = initialize_api(api_key, api_url)
@@ -235,22 +247,22 @@ def main(api_key: str, resource="service", resource_type="", console="net", fold
         for my_resource in ["service", "policy", "role"]:
             if my_resource == "service":
                 for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp"]:
-                    import_and_plan(api, "service", my_resource_type, folder_name)
+                    import_and_plan(api, "service", my_resource_type, folder_name, module)
             if my_resource == "policy":
                 for my_resource_type in ["infra", "tunnel", "web"]:
-                    import_and_plan(api, "policy", my_resource_type, folder_name)
+                    import_and_plan(api, "policy", my_resource_type, folder_name, module)
             if my_resource == "role":
-                import_and_plan(api, "role", "", folder_name)
+                import_and_plan(api, "role", "", folder_name, module)
     elif resource == "service" and resource_type == "all":
         for my_resource_type in ["web", "db", "k8s", "rdp", "ssh", "tcp"]:
-            import_and_plan(api, "service", my_resource_type, folder_name)
+            import_and_plan(api, "service", my_resource_type, folder_name, module)
     elif resource == "policy" and resource_type == "all":
         for my_resource_type in ["infra", "tunnel", "web"]:
-            import_and_plan(api, "policy", my_resource_type, folder_name)
+            import_and_plan(api, "policy", my_resource_type, folder_name, module)
     elif resource == "role" and resource_type == "all":
-        import_and_plan(api, "role", "", folder_name)
+        import_and_plan(api, "role", "", folder_name, module)
     else:
-        import_and_plan(api, resource, resource_type, folder_name)
+        import_and_plan(api, resource, resource_type, folder_name, module)
 
     # combine seperated resource files into a single file
     concat_files(["generated", "import"], folder_name)

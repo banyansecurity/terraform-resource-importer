@@ -1,4 +1,4 @@
-# : WARNING :
+[!Warning]
 Warning: Please contact your Banyan Customer Success representative, before running this script in your environment. The script may cause changes to your environment and we advise you to reach out to us to guide you through it. You may still decide to use it but that might change the configuration and cause unintended consequences.
 
 # Banyan Terraform Import Tool
