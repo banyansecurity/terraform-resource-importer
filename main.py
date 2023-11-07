@@ -3,7 +3,10 @@ import os
 import typer
 import subprocess
 import glob
+import click
+
 from banyan.api import BanyanApiClient
+from typing_extensions import Annotated
 
 app = typer.Typer()
 
@@ -49,7 +52,7 @@ def initialize_api(api_key, api_url):
 
 
 # Function to import resources and execute Terraform plan
-def import_and_plan(api, resource, resource_type, folder_name, module:bool = False):
+def import_and_plan(api, resource, resource_type, folder_name, module: bool = False):
     resources = get_resources(api, resource, resource_type)
     if len(resources) <= 0:
         print(f"No resource {resource.upper()} of type {resource_type.upper()} found.")
@@ -78,7 +81,8 @@ def import_and_plan(api, resource, resource_type, folder_name, module:bool = Fal
             with open(f"{folder_name}/failed_imports.txt", "a") as file:
                 content = f"Failed {resource_name} with error: {e}\n"
                 file.write(content)
-            print(f'.....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.')
+            print(
+                f'.....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.')
     # delete import.tf file which could have last entry
     os.remove(f"{folder_name}/import.tf")
     # Write all import statements to a single import.tf file
@@ -237,7 +241,19 @@ def create_import_file(import_statements: list, folder, file_name, module: bool 
 
 
 @app.command()
-def main(api_key: str, resource="service", resource_type="", console="net", folder="", module: bool = False):
+def main(api_key: str,
+         resource: Annotated[str, typer.Option(click_type=click.Choice(["service", "policy", "role", "all"], False),
+                                               help="resource to be imported")],
+
+         resource_type: Annotated[str, typer.Option(click_type=click.Choice(["all","web", "db","k8s","rdp","ssh","tcp","infra", "tunnel"], False),
+                                                    help="Type of selected resource to be imported, "
+                                                         "for --resource service options are [all, web, db, k8s, "
+                                                         "rdp, ssh, tcp] for --resource policy options are [all, web, "
+                                                         "infra, tunnel] for --resource role need not set this option "
+                                                         "or can provide value [all] ")],
+         console: Annotated[str, typer.Option(click_type=click.Choice(["net", "preview", "release"],False))] = "net",
+         folder="",
+         module: bool = False):
     folder_name = get_folder_name(folder)
     api_url = get_api_url(console)
     api = initialize_api(api_key, api_url)

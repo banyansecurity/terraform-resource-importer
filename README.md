@@ -45,12 +45,19 @@ Arguments:
   API_KEY  [required]
 
 Options:
-  --resource String                 [default: service]
-  --resource-type String
-  --console String                  [default: net]
-  --folder String
-  --separate-files / --no-separate-files
-                                  [default: no-separate-files]
+  --resource [service|policy|role|all]
+                                  resource to be imported  [required]
+  --resource-type [all|web|db|k8s|rdp|ssh|tcp|infra|tunnel]
+                                  Type of selected resource to be imported,
+                                  for --resource service options are [all,
+                                  web, db, k8s, rdp, ssh, tcp] for --resource
+                                  policy options are [all, web, infra, tunnel]
+                                  for --resource role need not set this option
+                                  or can provide value [all]   [required]
+  --console [net|preview|release]
+                                  [default: net]
+  --folder TEXT
+  --module / --no-module          [default: no-module]
   --install-completion [bash|zsh|fish|powershell|pwsh]
                                   Install completion for the specified shell.
   --show-completion [bash|zsh|fish|powershell|pwsh]
