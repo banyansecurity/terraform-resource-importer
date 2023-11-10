@@ -85,11 +85,14 @@ terraform apply
 Here are some example commands to use the Banyan Terraform Import Tool:
 
 ```bash
-# Import services with separate configuration files
-python main.py --api-key <banyan_api_key> --resource service --resource-type web --console net --separate-files
 
-# Import policies with a single configuration file
-python main.py --api-key <banyan_api_key> --resource policy --resource-type infra --console release
+# Import all policies 
+python main.py <banyan_api_key> --resource policy --resource-type all --folder mypolicies
+# Import all resources
+python main.py <banyan_api_key> --resource all --folder allresources 
+# Import certain services
+python main.py <banyan_api_key> --resource service --resource-type web --folder mywebservices 
+
 ```
 
 
