@@ -196,13 +196,13 @@ def execute_terraform_plan(folder, file_name):
 
 
 # Function to execute Terraform initialization
-def execute_terraform_init(host, api_key, folder):
+def execute_terraform_init(host, api_key, folder, provider_version):
     terraform_template = f'''
 terraform {{
   required_providers {{
     banyan = {{
       source = "banyansecurity/banyan"
-      version = "1.2.6"
+      version = "{provider_version}"
     }}
   }}
 }}
@@ -253,11 +253,12 @@ def main(api_key: str,
                                                          "or can provide value [all] ")],
          console: Annotated[str, typer.Option(click_type=click.Choice(["net", "preview", "release"],False))] = "net",
          folder="",
-         module: bool = False):
+         module: bool = False,
+         provider_version: str = ">= 1.2.6"):
     folder_name = get_folder_name(folder)
     api_url = get_api_url(console)
     api = initialize_api(api_key, api_url)
-    execute_terraform_init(host=api_url, api_key=api_key, folder=folder_name)
+    execute_terraform_init(host=api_url, api_key=api_key, folder=folder_name, provider_version=provider_version)
     if resource == "all":
         for my_resource in ["service", "policy", "role"]:
             if my_resource == "service":
