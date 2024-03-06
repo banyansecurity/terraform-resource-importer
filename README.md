@@ -58,6 +58,7 @@ Options:
                                   [default: net]
   --folder TEXT
   --module / --no-module          [default: no-module]
+  --provider-version TEXT         [default: >= 1.2.6]
   --install-completion [bash|zsh|fish|powershell|pwsh]
                                   Install completion for the specified shell.
   --show-completion [bash|zsh|fish|powershell|pwsh]
