@@ -93,6 +93,8 @@ python main.py <banyan_api_key> --resource policy --resource-type all --folder m
 python main.py <banyan_api_key> --resource all --folder allresources 
 # Import certain services
 python main.py <banyan_api_key> --resource service --resource-type web --folder mywebservices 
+#Import with specified Provider Version 
+python main.py <banmyan_api_key> --resource role --folder myallroles --provider-version "1.2.8"
 
 ```
 
