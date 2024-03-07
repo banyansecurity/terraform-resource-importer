@@ -84,7 +84,8 @@ def import_and_plan(api, resource, resource_type, folder_name, module: bool = Fa
                 content = f"Failed {resource_name} with error: {e}\n"
                 file.write(content)
             print(
-                f'.....[WARN] Error exporting resource {resource_name} error: {e}. REFER: {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.')
+                f'.....[WARN] Error exporting resource {resource_name} error: {e}. REFER:'
+                f' {folder_name}/failed_imports.txt and {folder_name}/terraform_command.logs for reasons.')
     # delete import.tf file which could have last entry
     os.remove(f"{folder_name}/import.tf")
     # Write all import statements to a single import.tf file
@@ -95,7 +96,8 @@ def import_and_plan(api, resource, resource_type, folder_name, module: bool = Fa
     create_import_file(import_statements, folder_name, f"import_{my_resource_import}.tf", module=module)
 
     print(
-        f"---------------Finished importing {len(resources)} {resource.upper()} of type {resource_type.upper()}--------------------")
+        f"---------------Finished importing "
+        f"{len(resources)} {resource.upper()} of type {resource_type.upper()}--------------------")
 
 
 def get_resource_name(name):
@@ -109,7 +111,9 @@ def get_resource_name(name):
 def get_filtered_infra_services(resources, resource_type):
     return [service for service in resources if
             str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()
-            or (str(service.service_spec.metadata.tags.template).lower() == str(banyan.model.service.ServiceTemplate.TCP).lower() and str(service.service_spec.metadata.tags.service_app_type).lower() == "generic")]
+            or (str(service.service_spec.metadata.tags.template).lower() ==
+                str(banyan.model.service.ServiceTemplate.TCP).lower()
+                and str(service.service_spec.metadata.tags.service_app_type).lower() == "generic")]
 
 
 def get_filtered_policies(resources, resource_type):
@@ -250,13 +254,15 @@ def main(api_key: str,
          resource: Annotated[str, typer.Option(click_type=click.Choice(["service", "policy", "role", "all"], False),
                                                help="resource to be imported")],
 
-         resource_type: Annotated[str, typer.Option(click_type=click.Choice(["all","web", "db","k8s","rdp","ssh","tcp","infra", "tunnel"], False),
+         resource_type: Annotated[str, typer.Option(click_type=click.Choice(
+             ["all", "web", "db", "k8s", "rdp", "ssh", "tcp", "infra", "tunnel"], False),
                                                     help="Type of selected resource to be imported, "
                                                          "for --resource service options are [all, web, db, k8s, "
                                                          "rdp, ssh, tcp] for --resource policy options are [all, web, "
                                                          "infra, tunnel] for --resource role need not set this option "
                                                          "or can provide value [all] ")],
-         console: Annotated[str, typer.Option(click_type=click.Choice(["net", "preview", "release"],False))] = "net",
+         console: Annotated[str, typer.Option(click_type=click.Choice(
+             ["net", "preview", "release"], False))] = "net",
          folder="",
          module: bool = False,
          provider_version: str = ">= 1.2.6"):
