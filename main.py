@@ -1,5 +1,7 @@
 import json
 import os
+
+import banyan.model.service
 import typer
 import subprocess
 import glob
@@ -99,12 +101,15 @@ def import_and_plan(api, resource, resource_type, folder_name, module: bool = Fa
 def get_resource_name(name):
     resource_name = (str(name).replace(".", "-").replace(" ", "-").
                      replace("/", "-").replace(":", "-").lower())
+    if str(resource_name)[0].isdigit():
+        resource_name = "i"+resource_name
     return resource_name
 
 
 def get_filtered_infra_services(resources, resource_type):
     return [service for service in resources if
-            str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()]
+            str(service.service_spec.metadata.tags.service_app_type).lower() == resource_type.lower()
+            or (str(service.service_spec.metadata.tags.template).lower() == str(banyan.model.service.ServiceTemplate.TCP).lower() and str(service.service_spec.metadata.tags.service_app_type).lower() == "generic")]
 
 
 def get_filtered_policies(resources, resource_type):
